@@ -1,0 +1,115 @@
+
+# Test a Go API with Keploy
+
+Learn how to capture real API interactions and replay them as automated tests using Keploy, Go, and Docker.
+
+## What you'll build
+
+You'll run a Go URL-shortener backed by MySQL, record API traffic, and inspect the generated test cases and test report.
+
+> **Quick start:** If this is your first time, read the prerequisites, then complete the steps in order. The tutorial is designed to work best when you follow the same sequence as the checklist.
+
+## How the workflow works
+### Why use Keploy?
+
+Traditional tests often require developers to write request inputs and expected responses manually. Keploy captures real API interactions and turns them into reusable test cases, including the relevant request and response data.
+
+During a replay, Keploy sends the recorded requests to the application and checks the resulting behavior against the captured expectations. This helps identify regressions when code changes unexpectedly alter an API response.
+
+**Important:** A passing replay only validates the scenarios that were captured and tested. It does not prove that every possible application behavior is correct.
+
+## Before you begin
+
+Before you start, make sure you are in the correct terminal and project directory.
+
+- Use your Ubuntu terminal for the Keploy CLI commands.
+- Run everything from the repository root where the sample app is cloned.
+- Confirm that:
+  - Go is installed
+  - Docker Desktop is running with WSL 2 integration
+  - Keploy CLI is installed in Ubuntu
+  - The `samples-go` repository is cloned locally
+
+> **Tip:** If a command fails with a missing binary or `docker` error, return to this checklist and verify each prerequisite before continuing.
+
+### Common setup issues
+
+- **`keploy: command not found`**: install the CLI and reopen the terminal.
+- **`docker: command not found`**: install Docker Desktop and make sure the daemon is running.
+- **Port already in use**: stop the service using the port or change the exposed port.
+- **Permission denied**: run the command with the correct user and confirm Docker access is working on WSL.
+- **Database connection errors**: verify MySQL is running and the service is reachable from the app container.
+
+## The application endpoints
+The sample URL-shortener exposes three endpoints:
+
+| Method | Endpoint | Purpose |
+|:--|:--|:--|
+| `POST` | `/create` | Create a shortened link |
+| `GET` | `/all` | List saved links |
+| `GET` | `/links/{id}` | Retrieve a link by ID |
+
+> **Why this matters:** You will create a short link first, then list the saved data. This helps you verify that the app is receiving requests and returning the expected responses.
+
+## Record real traffic
+
+Keploy records API interactions so they can be replayed as regression tests.
+
+> **Terminal:** Ubuntu shell in your project root
+
+```bash
+keploy record -c "docker run -p 8080:8080 --rm --name url-short --network keploy-network url-short" --container-name "url-short" --buildDelay 60
+```
+
+This command starts recording and watches the Docker container that is running the sample app.
+
+While recording is active, send a request to create a link:
+
+```bash
+curl -X POST http://localhost:8080/create \
+  -H "Content-Type: application/json" \
+  -d '{"link":"https://github.com"}'
+```
+
+Then request the saved links:
+
+```bash
+curl http://localhost:8080/all
+```
+
+Stop recording with `Ctrl+C` after you've captured the requests.
+
+> **Example output:** You should see Keploy capture the request and generate a test case from the recorded HTTP interaction.
+>
+> ```text
+> ✅ Captured request for POST /create
+> ✅ Captured request for GET /all
+> ✅ Test case generated
+> ```
+>
+> If the app is not started or the port is blocked, you will usually see a connection or Docker startup error instead of a successful capture.
+
+## Inspect the generated tests
+
+Keploy generates test cases and supporting mocks from the captured interactions. In this project, the generated test files include:
+
+- `keploy/tests/post-create-1.yaml`
+- `keploy/tests/get-all-1.yaml`
+
+The saved test report recorded **2 successful tests and 0 failures** for the recorded run.
+
+> **Example result:** The generated report should show the recorded API calls as passing tests, helping you compare the real traffic to future replays.
+>
+> ```text
+> 2 successful tests
+> 0 failed tests
+> ```
+
+> **Experiment note:** A later replay attempt encountered a Docker Desktop port-forwarding error. This shows why the test environment and container networking must be checked when a replay cannot start.
+
+## What to remember
+
+- Captured traffic gives you concrete examples of how your API behaves.
+- Replaying those examples helps detect regressions when application behavior changes.
+- Tests depend on a correctly configured application and its dependencies, including the database.
+- If something fails, check the terminal output, container status, ports, and the Keploy-generated test files before changing your code.
